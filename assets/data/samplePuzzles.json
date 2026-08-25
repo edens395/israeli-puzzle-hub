@@ -1,0 +1,251 @@
+[
+  {
+    "dateISO": "2026-08-16",
+    "editionNumber": 42,
+    "hebrewDate": "כ״ג באב תשפ״ו",
+    "nonogram": {
+      "id": "nonogram-heart-1",
+      "title": "לב ❤️ (5x5)",
+      "width": 5,
+      "height": 5,
+      "rowClues": [[1, 1], [5], [5], [3], [1]],
+      "colClues": [[2], [3], [4], [3], [2]],
+      "solution": [
+        [false, true, false, true, false],
+        [true, true, true, true, true],
+        [true, true, true, true, true],
+        [false, true, true, true, false],
+        [false, false, true, false, false]
+      ]
+    },
+    "sudoku": {
+      "id": "sudoku-medium-1",
+      "title": "סודוקו בינוני #1",
+      "difficulty": "medium",
+      "initialBoard": "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
+      "solution": "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+    },
+    "tashbetz": {
+      "id": "tashbetz-1",
+      "title": "מיני-תשחץ #1 • ירושלים ושלום",
+      "rows": 5,
+      "cols": 5,
+      "rawClues": [
+        {
+          "id": "a1",
+          "number": 1,
+          "direction": "across",
+          "text": "ברכת פגישה ופרידה בעברית 🤝",
+          "answer": "שלום",
+          "startRow": 0,
+          "startCol": 4
+        },
+        {
+          "id": "a2",
+          "number": 2,
+          "direction": "across",
+          "text": "צמח צבעוני בגינה 🌸",
+          "answer": "פרח",
+          "startRow": 2,
+          "startCol": 4
+        },
+        {
+          "id": "a3",
+          "number": 3,
+          "direction": "across",
+          "text": "מאירה בשמיים ביום ☀️",
+          "answer": "שמש",
+          "startRow": 4,
+          "startCol": 3
+        },
+        {
+          "id": "d1",
+          "number": 1,
+          "direction": "down",
+          "text": "תוקעים בו בראש השנה 📯",
+          "answer": "שופר",
+          "startRow": 0,
+          "startCol": 4
+        },
+        {
+          "id": "d2",
+          "number": 4,
+          "direction": "down",
+          "text": "חלק גוף עליון / מנהיג 👑",
+          "answer": "ראש",
+          "startRow": 2,
+          "startCol": 3
+        }
+      ]
+    }
+  },
+  {
+    "dateISO": "2026-08-17",
+    "editionNumber": 43,
+    "hebrewDate": "כ״ד באב תשפ״ו",
+    "nonogram": {
+      "id": "nonogram-cup-2",
+      "title": "ספל קפה ☕ (5x5)",
+      "width": 5,
+      "height": 5,
+      "rowClues": [[1, 1], [5], [5], [3], [3]],
+      "colClues": [[2], [4], [4], [4], [2]],
+      "solution": [
+        [false, true, false, true, false],
+        [true, true, true, true, true],
+        [true, true, true, true, true],
+        [false, true, true, true, false],
+        [false, true, true, true, false]
+      ]
+    },
+    "sudoku": {
+      "id": "sudoku-easy-2",
+      "title": "סודוקו קל #2",
+      "difficulty": "easy",
+      "initialBoard": "600874001200036000000000008020010000000000050000000030008000000090000070000050009",
+      "solution": "635874921287136549914529768329415807741698253856270134568341297192783475473952618"
+    },
+    "tashbetz": {
+      "id": "tashbetz-2",
+      "title": "מיני-תשחץ #2 • כוכבים וברקים",
+      "rows": 5,
+      "cols": 5,
+      "rawClues": [
+        {
+          "id": "a1",
+          "number": 1,
+          "direction": "across",
+          "text": "זורח בשמי הלילה ⭐",
+          "answer": "כוכב",
+          "startRow": 0,
+          "startCol": 4
+        },
+        {
+          "id": "a2",
+          "number": 2,
+          "direction": "across",
+          "text": "אור חזק בסופה ⚡",
+          "answer": "ברק",
+          "startRow": 2,
+          "startCol": 4
+        },
+        {
+          "id": "a3",
+          "number": 3,
+          "direction": "across",
+          "text": "מאכל מתוק של ראש השנה 🍯",
+          "answer": "דבש",
+          "startRow": 4,
+          "startCol": 3
+        },
+        {
+          "id": "d1",
+          "number": 1,
+          "direction": "down",
+          "text": "חברו הטוב של האדם 🐶",
+          "answer": "כלב",
+          "startRow": 0,
+          "startCol": 4
+        },
+        {
+          "id": "d2",
+          "number": 4,
+          "direction": "down",
+          "text": "זז לפי המנגינה 💃",
+          "answer": "רקד",
+          "startRow": 2,
+          "startCol": 3
+        }
+      ]
+    }
+  },
+  {
+    "dateISO": "2026-08-18",
+    "editionNumber": 44,
+    "hebrewDate": "כ״ה באב תשפ״ו",
+    "nonogram": {
+      "id": "nonogram-boat-3",
+      "title": "מפרשית ⛵ (5x5)",
+      "width": 5,
+      "height": 5,
+      "rowClues": [[1], [2], [3], [5], [3]],
+      "colClues": [[1], [2], [5], [2], [1]],
+      "solution": [
+        [false, false, true, false, false],
+        [false, true, true, false, false],
+        [true, true, true, false, false],
+        [true, true, true, true, true],
+        [false, true, true, true, false]
+      ]
+    },
+    "sudoku": {
+      "id": "sudoku-hard-3",
+      "title": "סודוקו קשה #3",
+      "difficulty": "hard",
+      "initialBoard": "000000085000210009960080100500800016000000000890006007009070052300054000480000000",
+      "solution": "143792685785213429962485137527839416631547298894126357219378052376954801480601973"
+    },
+    "tashbetz": {
+      "id": "tashbetz-3",
+      "title": "מיני-תשחץ #3 • שבת מנוחה",
+      "rows": 5,
+      "cols": 5,
+      "rawClues": [
+        {
+          "id": "a1",
+          "number": 1,
+          "direction": "across",
+          "text": "היום השביעי בשבוע 🕯️",
+          "answer": "שבת",
+          "startRow": 0,
+          "startCol": 4
+        },
+        {
+          "id": "a2",
+          "number": 2,
+          "direction": "across",
+          "text": "ידיד קרוב ונאמן 🤝",
+          "answer": "חבר",
+          "startRow": 2,
+          "startCol": 4
+        },
+        {
+          "id": "a3",
+          "number": 3,
+          "direction": "across",
+          "text": "דרך עירונית לנסיעה 🛣️",
+          "answer": "רחוב",
+          "startRow": 4,
+          "startCol": 3
+        },
+        {
+          "id": "d1",
+          "number": 1,
+          "direction": "down",
+          "text": "מאושר וטוב לב 😄",
+          "answer": "שמח",
+          "startRow": 0,
+          "startCol": 4
+        },
+        {
+          "id": "d2",
+          "number": 4,
+          "direction": "down",
+          "text": "חפירה עמוקה באדמה 🕳️",
+          "answer": "בור",
+          "startRow": 0,
+          "startCol": 3
+        },
+        {
+          "id": "d3",
+          "number": 5,
+          "direction": "down",
+          "text": "אוויר בתנועה / נשמה 🌬️",
+          "answer": "רוח",
+          "startRow": 2,
+          "startCol": 2
+        }
+      ]
+    }
+  }
+]
