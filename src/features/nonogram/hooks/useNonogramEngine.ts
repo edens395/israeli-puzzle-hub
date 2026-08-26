@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   autoCrossLineInGrid,
   checkColCompleted,
@@ -34,11 +34,26 @@ export function useNonogramEngine(
     }
     return initialBoard;
   });
+
+  // Sync internal board state when initialBoard or initialGrid changes externally
+  useEffect(() => {
+    if (initialGrid) {
+      const isSolved = checkIsSolved(initialGrid, initialBoard.solution);
+      setBoard({ ...initialBoard, grid: initialGrid, isCompleted: isSolved });
+    } else {
+      setBoard(initialBoard);
+    }
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [initialBoard, initialGrid]);
   const [inputMode, setInputModeState] = useState<InputMode>('FILL');
 
-  const setGridState = useCallback((newGrid: Grid) => {
+  const setGridState = useCallback((newGrid: Grid, isCompletedOverride?: boolean) => {
     setBoard((prev) => {
-      const isSolved = checkIsSolved(newGrid, prev.solution);
+      const isSolved =
+        typeof isCompletedOverride === 'boolean'
+          ? isCompletedOverride
+          : checkIsSolved(newGrid, prev.solution);
       return { ...prev, grid: newGrid, isCompleted: isSolved };
     });
   }, []);
@@ -286,6 +301,7 @@ export function useNonogramEngine(
   // Manual auto-cross for completed line
   const autoCrossLine = useCallback(
     (type: 'row' | 'col', index: number) => {
+      if (board.isCompleted) return;
       const { newGrid, updatedCells } = autoCrossLineInGrid(board.grid, type, index);
       if (updatedCells.length > 0) {
         const historyStep: HistoryStep = {
@@ -299,12 +315,12 @@ export function useNonogramEngine(
         updateBoardWithGrid(newGrid, historyStep);
       }
     },
-    [board.grid, updateBoardWithGrid]
+    [board.grid, board.isCompleted, updateBoardWithGrid]
   );
 
   // Undo action
   const undo = useCallback(() => {
-    if (!enableHistory || undoStack.length === 0) return;
+    if (board.isCompleted || !enableHistory || undoStack.length === 0) return;
 
     const lastStep = undoStack[undoStack.length - 1];
     setUndoStack((stack) => stack.slice(0, -1));
@@ -322,11 +338,11 @@ export function useNonogramEngine(
     });
 
     setRedoStack((stack) => [...stack, lastStep]);
-  }, [enableHistory, undoStack]);
+  }, [board.isCompleted, enableHistory, undoStack]);
 
   // Redo action
   const redo = useCallback(() => {
-    if (!enableHistory || redoStack.length === 0) return;
+    if (board.isCompleted || !enableHistory || redoStack.length === 0) return;
 
     const nextStep = redoStack[redoStack.length - 1];
     setRedoStack((stack) => stack.slice(0, -1));
@@ -344,10 +360,11 @@ export function useNonogramEngine(
     });
 
     setUndoStack((stack) => [...stack, nextStep]);
-  }, [enableHistory, redoStack]);
+  }, [board.isCompleted, enableHistory, redoStack]);
 
   // Board reset
   const reset = useCallback(() => {
+    if (board.isCompleted) return;
     setBoard((prev) => ({
       ...prev,
       grid: createEmptyGrid(prev.height, prev.width),
@@ -355,7 +372,7 @@ export function useNonogramEngine(
     }));
     setUndoStack([]);
     setRedoStack([]);
-  }, []);
+  }, [board.isCompleted]);
 
   return {
     board,

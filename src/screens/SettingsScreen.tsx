@@ -24,9 +24,10 @@ import { getSoundEnabled, setSoundEnabled } from '../services/soundEffects';
 
 export interface SettingsScreenProps {
   onBackToHub: () => void;
+  onOpenAdmin?: () => void;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBackToHub }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBackToHub, onOpenAdmin }) => {
   const { theme, themeMode, setThemeMode, availableThemes, isDark } = useTheme();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(false);
@@ -246,6 +247,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBackToHub }) =
             פותח באהבה עבור חובבי תשחצים, סודוקו ושחור ופתור בישראל 🇮🇱
           </Text>
         </View>
+
+        {/* Section 5: Admin Control Panel */}
+        {onOpenAdmin && (
+          <View style={[styles.card, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+              🛡️ לוח בקרת מנהל (Admin Dashboard)
+            </Text>
+            <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>
+              ניהול מחולל ה-Nonogram, מעקב יומני שרת וצפייה בחידות מתוזמנות
+            </Text>
+
+            <Pressable
+              style={[styles.syncButton, { backgroundColor: theme.colors.bgSecondary, borderWidth: 1, borderColor: theme.colors.border }]}
+              onPress={onOpenAdmin}
+            >
+              <Text style={[styles.syncButtonText, { color: theme.colors.textPrimary }]}>פתח לוח בקרה 🛡️</Text>
+            </Pressable>
+          </View>
+        )}
 
       </ScrollView>
     </SafeAreaView>

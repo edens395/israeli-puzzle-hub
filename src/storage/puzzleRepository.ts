@@ -1,9 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DailyEditionData, PuzzleCategory, PuzzleProgress, PuzzleStatus, UserStats } from "../models";
+import { cloudDatabaseService } from '../services/cloudDatabaseService';
 
 export type { DailyEditionData, PuzzleCategory, PuzzleProgress, PuzzleStatus, UserStats };
 
-export const getTodayDateString = (date: Date = new Date()): string => {
+export const getTodayDateString = (date: Date | string = new Date()): string => {
+  if (typeof date === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+    const parsed = new Date(date);
+    if (!isNaN(parsed.getTime())) {
+      const yyyy = parsed.getFullYear();
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+      const dd = String(parsed.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return date;
+  }
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
@@ -63,20 +77,21 @@ export const getHebrewFormattedDate = (date: Date | string = new Date()): string
  * Generates default daily edition progress for a given date
  */
 function createDefaultDailyEdition(dateString: Date): DailyEditionData {
+  const dateKey = getTodayDateString(dateString);
   return {
     dateString,
     dateFormattedHebrew: getHebrewFormattedDate(dateString),
     puzzles: {
       nonogram: {
-        puzzleId: `nonogram_${dateString.toLocaleDateString()}`,
+        puzzleId: `nonogram_${dateKey}`,
         category: 'nonogram',
         dateString,
-        status: 'in_progress',
-        completionPercent: 55,
-        elapsedSeconds: 145,
+        status: 'not_started',
+        completionPercent: 0,
+        elapsedSeconds: 0,
       },
       sudoku: {
-        puzzleId: `sudoku_${dateString.toLocaleDateString()}`,
+        puzzleId: `sudoku_${dateKey}`,
         category: 'sudoku',
         dateString,
         status: 'not_started',
@@ -84,7 +99,7 @@ function createDefaultDailyEdition(dateString: Date): DailyEditionData {
         elapsedSeconds: 0,
       },
       tashbetz: {
-        puzzleId: `tashbetz_${dateString.toLocaleDateString()}`,
+        puzzleId: `tashbetz_${dateKey}`,
         category: 'tashbetz',
         dateString,
         status: 'completed',
@@ -98,15 +113,42 @@ function createDefaultDailyEdition(dateString: Date): DailyEditionData {
 
 export const puzzleRepository = {
   /**
-   * Fetches daily edition progress for a specific date (defaults to today)
+   * Fetches daily edition progress for a specific date (defaults to today).
+   * Checks local storage first, then fallbacks to cloud Supabase database.
    */
   async getDailyProgress(dateInput: Date | string = new Date()): Promise<DailyEditionData> {
-    const dateObj = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    const raw = await safeGetItem(`${STORAGE_KEYS.DAILY_PREFIX}${dateObj.toISOString().split('T')[0]}`);
+    const dateKey = getTodayDateString(dateInput);
+    const raw = await safeGetItem(`${STORAGE_KEYS.DAILY_PREFIX}${dateKey}`);
     if (raw) {
       return JSON.parse(raw) as DailyEditionData;
     }
-    const defaultData = createDefaultDailyEdition(dateObj);
+
+    // Initialize default structure
+    const defaultData = createDefaultDailyEdition(dateKey);
+
+    // Sync remote cloud progress from Supabase if available
+    try {
+      const remoteData = await cloudDatabaseService.fetchRemoteProgress(dateKey);
+      if (remoteData && Array.isArray(remoteData)) {
+        for (const p of remoteData) {
+          if (p.category && defaultData.puzzles[p.category as PuzzleCategory]) {
+            defaultData.puzzles[p.category as PuzzleCategory] = {
+              puzzleId: `${p.category}_${dateKey}`,
+              category: p.category,
+              dateString: dateKey,
+              status: p.status,
+              completionPercent: p.completion_percent,
+              elapsedSeconds: p.elapsed_seconds,
+              savedGridState: p.saved_grid_state,
+              completedAt: p.updated_at ? new Date(p.updated_at).getTime() : undefined,
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed fetching remote progress fallback', e);
+    }
+
     await this.saveDailyEditionData(defaultData);
     return defaultData;
   },
@@ -115,9 +157,9 @@ export const puzzleRepository = {
    * Saves complete daily edition data structure
    */
   async saveDailyEditionData(data: DailyEditionData): Promise<void> {
-    const dateObj = typeof data.dateString === 'string' ? new Date(data.dateString) : data.dateString;
+    const dateKey = getTodayDateString(data.dateString);
     await safeSetItem(
-      `${STORAGE_KEYS.DAILY_PREFIX}${dateObj.toISOString().split('T')[0]}`,
+      `${STORAGE_KEYS.DAILY_PREFIX}${dateKey}`,
       JSON.stringify(data)
     );
   },
@@ -133,8 +175,8 @@ export const puzzleRepository = {
     savedGridState?: any,
     dateInput: Date | string = new Date(),
   ): Promise<DailyEditionData> {
-    const dateObj = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    const dailyData = await this.getDailyProgress(dateObj);
+    const dateKey = getTodayDateString(dateInput);
+    const dailyData = await this.getDailyProgress(dateKey);
     const existing = dailyData.puzzles[category];
 
     const isNewlyCompleted = existing.status !== 'completed' && status === 'completed';
@@ -149,8 +191,11 @@ export const puzzleRepository = {
     };
     await this.saveDailyEditionData(dailyData);
 
+    // Background Cloud DB sync keyed by device_id
+    cloudDatabaseService.syncPuzzleProgress(dailyData.puzzles[category]).catch(() => {});
+
     if (isNewlyCompleted) {
-      await this.updateStreakOnSolve(dateObj, category);
+      await this.updateStreakOnSolve(dateKey, category);
     }
 
     return dailyData;
@@ -170,8 +215,9 @@ export const puzzleRepository = {
   /**
    * Updates active streak and completion stats when a puzzle is solved
    */
-  async updateStreakOnSolve(dateString: Date, category: PuzzleCategory): Promise<UserStats> {
+  async updateStreakOnSolve(dateInput: Date | string, category: PuzzleCategory): Promise<UserStats> {
     const stats = await this.getUserStats();
+    const dateString = getTodayDateString(dateInput);
     let { currentStreak, longestStreak, lastSolvedDate, totalPuzzlesCompleted, categoryCounts } = stats;
 
     totalPuzzlesCompleted += 1;

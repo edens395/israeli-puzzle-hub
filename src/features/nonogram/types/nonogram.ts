@@ -118,5 +118,5 @@ export interface UseNonogramEngineReturn {
   undo: () => void;
   redo: () => void;
   reset: () => void;
-  setGridState: (grid: Grid) => void;
+  setGridState: (grid: Grid, isCompletedOverride?: boolean) => void;
 }

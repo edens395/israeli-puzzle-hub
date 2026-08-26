@@ -14,6 +14,7 @@ export interface NonogramGridProps {
   onDragStart: (row: number, col: number) => void;
   onDragMove: (row: number, col: number) => void;
   onDragEnd: () => void;
+  isReadOnly?: boolean;
 }
 
 export const NonogramGrid: React.FC<NonogramGridProps> = ({
@@ -26,6 +27,7 @@ export const NonogramGrid: React.FC<NonogramGridProps> = ({
   onDragStart,
   onDragMove,
   onDragEnd,
+  isReadOnly = false,
 }) => {
   const { theme } = useTheme();
   const height = grid.length;
@@ -82,39 +84,46 @@ export const NonogramGrid: React.FC<NonogramGridProps> = ({
   const tapGesture = useMemo(
     () =>
       Gesture.Tap()
+        .enabled(!isReadOnly)
         .runOnJS(true)
         .onEnd((e) => {
+          if (isReadOnly) return;
           const coords = resolveCellCoordinates(e.x, e.y);
           if (coords) {
             onCellTap(coords.row, coords.col);
           }
         }),
-    [onCellTap, resolveCellCoordinates]
+    [isReadOnly, onCellTap, resolveCellCoordinates]
   );
 
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
+        .enabled(!isReadOnly)
         .runOnJS(true)
         .onStart((e) => {
+          if (isReadOnly) return;
           const coords = resolveCellCoordinates(e.x, e.y);
           if (coords) {
             onDragStart(coords.row, coords.col);
           }
         })
         .onUpdate((e) => {
+          if (isReadOnly) return;
           const coords = resolveCellCoordinates(e.x, e.y);
           if (coords) {
             onDragMove(coords.row, coords.col);
           }
         })
         .onEnd(() => {
+          if (isReadOnly) return;
           onDragEnd();
         })
         .onFinalize(() => {
+          if (isReadOnly) return;
           onDragEnd();
         }),
-    [onDragEnd, onDragMove, onDragStart, resolveCellCoordinates]
+    [isReadOnly, onDragEnd, onDragMove, onDragStart, resolveCellCoordinates]
   );
 
   const combinedGesture = useMemo(
@@ -219,6 +228,7 @@ export const NonogramGrid: React.FC<NonogramGridProps> = ({
           {/* Interactive Cell Matrix on the RIGHT */}
           <GestureDetector gesture={combinedGesture}>
             <View
+              pointerEvents={isReadOnly ? 'none' : 'auto'}
               style={[
                 styles.matrixContainer,
                 {
@@ -226,6 +236,7 @@ export const NonogramGrid: React.FC<NonogramGridProps> = ({
                   height: height * cellSize,
                   backgroundColor: theme.colors.bgCard,
                   borderColor: theme.colors.borderStrong,
+                  opacity: isReadOnly ? 0.95 : 1,
                 },
               ]}
             >

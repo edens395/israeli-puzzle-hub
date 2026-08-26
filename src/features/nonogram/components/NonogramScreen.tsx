@@ -1,35 +1,60 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { VictoryModal } from '../../../components/common/VictoryModal';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, StyleSheet, View } from 'react-native';
+import { GameScreenLayout } from '../../../components/layout/GameScreenLayout';
+import { Caption } from '../../../components/ui/Typography';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePuzzleTimer } from '../../../hooks/usePuzzleTimer';
-import { puzzleRepository } from '../../../storage/puzzleRepository';
+import { dailyPuzzleService } from '../../../services/dailyPuzzleService';
+import { getTodayDateString, puzzleRepository } from '../../../storage/puzzleRepository';
 import { SAMPLE_PUZZLES } from '../data/samplePuzzles';
 import { useNonogramEngine } from '../hooks/useNonogramEngine';
-import { CellState, Grid } from '../types/nonogram';
+import { CellState, Grid, NonogramBoard } from '../types/nonogram';
 import { NonogramControls } from './NonogramControls';
 import { NonogramGrid } from './NonogramGrid';
 
 export interface NonogramScreenProps {
   onBackToHub?: () => void;
+  targetDate?: Date | string;
 }
 
-export const NonogramScreen: React.FC<NonogramScreenProps> = ({ onBackToHub }) => {
-  const { theme, isDark } = useTheme();
+export const NonogramScreen: React.FC<NonogramScreenProps> = ({
+  onBackToHub = () => {},
+  targetDate,
+}) => {
+  const { theme } = useTheme();
+  const dateKey = useMemo(
+    () => getTodayDateString(targetDate || new Date()),
+    [typeof targetDate === 'string' ? targetDate : targetDate?.getTime?.()]
+  );
+
   const [showVictoryModal, setShowVictoryModal] = useState<boolean>(false);
-  const [streakDays, setStreakDays] = useState<number>(5);
-
+  const [activeBoard, setActiveBoard] = useState<NonogramBoard>(SAMPLE_PUZZLES[0]);
+  const [loading, setLoading] = useState<boolean>(true);
   const timer = usePuzzleTimer(true);
-  const initialBoard = SAMPLE_PUZZLES[0];
+  const hasRestoredRef = useRef<boolean>(false);
 
-  const engine = useNonogramEngine(initialBoard, {
+  // Fetch target date's dynamic Nonogram from Supabase (auto-generates dynamic puzzle on the fly if missing)
+  useEffect(() => {
+    async function loadRemoteNonogram() {
+      try {
+        setLoading(true);
+        const remoteBoard = await dailyPuzzleService.getDailyNonogram(dateKey);
+        if (remoteBoard) {
+          setActiveBoard(remoteBoard);
+        } else {
+          setActiveBoard(SAMPLE_PUZZLES[0]);
+        }
+      } catch (e) {
+        console.warn('Error loading remote nonogram:', e);
+        setActiveBoard(SAMPLE_PUZZLES[0]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadRemoteNonogram();
+  }, [dateKey]);
+
+  const engine = useNonogramEngine(activeBoard, {
     autoCrossCompletedLines: true,
     enableHistory: true,
     onSolve: async () => {
@@ -41,10 +66,9 @@ export const NonogramScreen: React.FC<NonogramScreenProps> = ({ onBackToHub }) =
           100,
           'completed',
           timer.elapsedSeconds,
-          engine.grid
+          engine.grid,
+          dateKey
         );
-        const userStats = await puzzleRepository.getUserStats();
-        setStreakDays(userStats.currentStreak);
       } catch (e) {
         // fallback
       }
@@ -61,25 +85,23 @@ export const NonogramScreen: React.FC<NonogramScreenProps> = ({ onBackToHub }) =
   // Restore saved progress & timer on mount
   useEffect(() => {
     async function restoreProgress() {
+      if (!activeBoard) return;
       try {
-        const dailyData = await puzzleRepository.getDailyProgress();
+        const dailyData = await puzzleRepository.getDailyProgress(dateKey);
         const nonogramSaved = dailyData?.puzzles?.nonogram;
         if (nonogramSaved) {
           const isCompleted = nonogramSaved.status === 'completed' || nonogramSaved.completionPercent === 100;
           
           if (isCompleted) {
-            // When watching a completed solution, display full solved drawing with X cells visible & pause timer
-            if (nonogramSaved.savedGridState && Array.isArray(nonogramSaved.savedGridState)) {
-              const completeSavedGrid = nonogramSaved.savedGridState.map((r: CellState[]) =>
-                r.map((c: CellState) => (c === CellState.EMPTY ? CellState.CROSS : c))
-              );
-              engine.setGridState(completeSavedGrid);
-            } else {
-              const fullSolutionGrid = createSolvedGrid(initialBoard.solution);
-              engine.setGridState(fullSolutionGrid);
-            }
+            const fullSolutionGrid = createSolvedGrid(activeBoard.solution);
+            engine.setGridState(fullSolutionGrid, true);
             timer.pauseTimer();
-          } else if (nonogramSaved.savedGridState && Array.isArray(nonogramSaved.savedGridState)) {
+          } else if (
+            nonogramSaved.savedGridState &&
+            Array.isArray(nonogramSaved.savedGridState) &&
+            nonogramSaved.savedGridState.length === activeBoard.height &&
+            nonogramSaved.savedGridState[0]?.length === activeBoard.width
+          ) {
             engine.setGridState(nonogramSaved.savedGridState);
           }
 
@@ -89,12 +111,16 @@ export const NonogramScreen: React.FC<NonogramScreenProps> = ({ onBackToHub }) =
         }
       } catch (e) {
         console.warn('Failed restoring Nonogram progress', e);
+      } finally {
+        hasRestoredRef.current = true;
       }
     }
-    restoreProgress();
-  }, []);
+    if (!loading) {
+      restoreProgress();
+    }
+  }, [activeBoard, dateKey, loading]);
 
-  // Save progress periodically on grid or timer change (only if not already completed)
+  // Save progress periodically on grid or timer change (only after initial restore & if not completed)
   const engineGridRef = useRef(engine.grid);
   engineGridRef.current = engine.grid;
 
@@ -102,43 +128,39 @@ export const NonogramScreen: React.FC<NonogramScreenProps> = ({ onBackToHub }) =
   timerRef.current = timer.elapsedSeconds;
 
   useEffect(() => {
-    if (!engine.isCompleted) {
+    if (hasRestoredRef.current && !engine.isCompleted) {
       puzzleRepository.savePuzzleProgress(
         'nonogram',
         50,
         'in_progress',
         timerRef.current,
-        engineGridRef.current
+        engineGridRef.current,
+        dateKey
       ).catch(() => {});
     }
-  }, [engine.grid, timer.elapsedSeconds]);
+  }, [engine.grid, timer.elapsedSeconds, dateKey]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.colors.bgPrimary }]}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <Caption style={{ marginTop: 12 }}>טוען חידה...</Caption>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.bgPrimary }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.bgPrimary} />
-      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        
-        {/* Timer Bar (Centered below top navigation header) */}
-        <View style={styles.timerRow}>
-          <View style={[styles.timerBadge, { backgroundColor: theme.colors.bgSecondary, borderColor: theme.colors.border }]}>
-            <Text style={[styles.timerBadgeText, { color: theme.colors.textPrimary }]}>⏱️ {timer.formattedTime}</Text>
-          </View>
-        </View>
-
-        {/* Nonogram Grid Container (Row clues on the LEFT side) */}
-        <NonogramGrid
-          grid={engine.grid}
-          rowClues={engine.board.rowClues}
-          colClues={engine.board.colClues}
-          completedRows={engine.completedRows}
-          completedCols={engine.completedCols}
-          onCellTap={engine.handleCellTap}
-          onDragStart={engine.handleDragStart}
-          onDragMove={engine.handleDragMove}
-          onDragEnd={engine.handleDragEnd}
-        />
-
-        {/* Control Toolbar */}
+    <GameScreenLayout
+      title="שחור ופתור"
+      category="nonogram"
+      onBackToHub={onBackToHub}
+      elapsedSeconds={timer.elapsedSeconds}
+      formattedTime={timer.formattedTime}
+      showVictoryModal={showVictoryModal}
+      onCloseVictoryModal={() => setShowVictoryModal(false)}
+      puzzleTitle={engine.board.title}
+      gridPreview={engine.board.solution}
+      bottomControls={
         <NonogramControls
           inputMode={engine.inputMode}
           canUndo={engine.canUndo}
@@ -150,50 +172,28 @@ export const NonogramScreen: React.FC<NonogramScreenProps> = ({ onBackToHub }) =
           onRedo={engine.redo}
           onReset={engine.reset}
         />
-
-      </ScrollView>
-
-      {/* Celebratory Victory Modal revealing the drawing */}
-      <VictoryModal
-        visible={showVictoryModal}
-        category="nonogram"
-        puzzleTitle={engine.board.title}
-        elapsedSeconds={timer.elapsedSeconds}
-        streakDays={streakDays}
-        gridPreview={engine.board.solution}
-        onClose={() => setShowVictoryModal(false)}
-        onBackToHub={() => {
-          setShowVictoryModal(false);
-          onBackToHub?.();
-        }}
+      }
+    >
+      <NonogramGrid
+        grid={engine.grid}
+        rowClues={engine.board.rowClues}
+        colClues={engine.board.colClues}
+        completedRows={engine.completedRows}
+        completedCols={engine.completedCols}
+        onCellTap={engine.handleCellTap}
+        onDragStart={engine.handleDragStart}
+        onDragMove={engine.handleDragMove}
+        onDragEnd={engine.handleDragEnd}
+        isReadOnly={engine.isCompleted}
       />
-    </SafeAreaView>
+    </GameScreenLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  loadingContainer: {
     flex: 1,
-  },
-  scrollContainer: {
-    width: '100%',
-    maxWidth: 500,
-    alignSelf: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 24,
-  },
-  timerRow: {
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  timerBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  timerBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

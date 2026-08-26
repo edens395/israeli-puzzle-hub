@@ -24,6 +24,7 @@ export interface HomeScreenProps {
   onOpenTashbetz?: () => void;
   onOpenSettings?: () => void;
   onOpenArchive?: (category?: PuzzleCategory) => void;
+  onOpenAdmin?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -32,6 +33,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenTashbetz,
   onOpenSettings,
   onOpenArchive,
+  onOpenAdmin,
 }) => {
   const { theme, isDark } = useTheme();
   const [dailyData, setDailyData] = useState<DailyEditionData | null>(null);
@@ -63,6 +65,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }
 
   const nonogramProgress = dailyData.puzzles.nonogram;
+  const isNonogramCompleted =
+    nonogramProgress.status === 'completed' || nonogramProgress.completionPercent === 100;
 
   const handleLaunchGame = (category: PuzzleCategory) => {
     if (category === 'nonogram') {
@@ -77,11 +81,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const getPrimaryButtonText = (progress: PuzzleProgress) => {
-    if (progress.status === 'completed') {
+    if (progress.status === 'completed' || progress.completionPercent === 100) {
       return 'צפה בפתרון';
-    }
-    if (progress.status === 'in_progress') {
-      return 'המשך משחק';
     }
     return 'שחק';
   };
@@ -93,8 +94,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         
         {/* Clean Top Header Section (Title "המוסף" aligned to the RIGHT side) */}
         <View style={styles.headerContainer}>
-          {/* Settings Icon on the LEFT */}
+          {/* Settings & Admin Icons on the LEFT */}
           <View style={styles.headerIconsRow}>
+            {onOpenAdmin && (
+              <Pressable
+                style={[styles.iconCircle, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}
+                onPress={onOpenAdmin}
+              >
+                <Text style={{ fontSize: 16 }}>🛡️</Text>
+              </Pressable>
+            )}
             {onOpenSettings && (
               <Pressable
                 style={[styles.iconCircle, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}
@@ -128,34 +137,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* Bottom Card Body */}
           <View style={styles.cardBottomBody}>
-            {/* Pill Buttons Stack */}
+            {/* Pill Buttons Stack (Thin Border, No Background Fill) */}
             <View style={styles.pillButtonsStack}>
               {/* Primary Play / Solution Button */}
               <Pressable
                 style={[
-                  styles.pillButtonPrimary,
-                  nonogramProgress.status === 'completed'
-                    ? { backgroundColor: theme.colors.successBg, borderColor: theme.colors.successText }
-                    : { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.borderStrong },
+                  styles.pillButton,
+                  { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
+                  isNonogramCompleted && { backgroundColor: theme.colors.successBg, borderColor: theme.colors.successText },
                 ]}
                 onPress={() => handleLaunchGame('nonogram')}
               >
                 <Text
                   style={[
-                    styles.pillButtonTextPrimary,
-                    { color: nonogramProgress.status === 'completed' ? theme.colors.successText : theme.colors.textPrimary },
+                    styles.pillButtonText,
+                    { color: isNonogramCompleted ? theme.colors.successText : theme.colors.textPrimary },
                   ]}
                 >
                   {getPrimaryButtonText(nonogramProgress)}
                 </Text>
               </Pressable>
 
-              {/* Secondary Archive Button */}
+              {/* Secondary Archive Button (Identical thin border & background) */}
               <Pressable
-                style={[styles.pillButtonSecondary, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}
+                style={[
+                  styles.pillButton,
+                  { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
+                ]}
                 onPress={() => onOpenArchive?.('nonogram')}
               >
-                <Text style={[styles.pillButtonTextSecondary, { color: theme.colors.textPrimary }]}>
+                <Text style={[styles.pillButtonText, { color: theme.colors.textPrimary }]}>
                   ארכיון
                 </Text>
               </Pressable>
@@ -195,7 +206,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   headerTextCol: {
-    alignItems: 'flex-end', // Aligned to the right
+    alignItems: 'flex-end',
   },
   headerTitle: {
     fontSize: 28,
@@ -224,7 +235,7 @@ const styles = StyleSheet.create({
   nytGameCard: {
     width: '100%',
     borderRadius: 24,
-    borderWidth: 1.5,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   cardTopBlock: {
@@ -257,28 +268,18 @@ const styles = StyleSheet.create({
   pillButtonsStack: {
     gap: 10,
   },
-  pillButtonPrimary: {
+  pillButton: {
     width: '100%',
-    paddingVertical: 14,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillButtonTextPrimary: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  pillButtonSecondary: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 22,
+    paddingVertical: 13,
+    borderRadius: 24,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillButtonTextSecondary: {
-    fontSize: 14,
+  pillButtonText: {
+    fontSize: 16,
     fontWeight: '700',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 });

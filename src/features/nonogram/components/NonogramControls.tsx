@@ -19,6 +19,7 @@ export const NonogramControls: React.FC<NonogramControlsProps> = ({
   inputMode,
   canUndo,
   canRedo,
+  isCompleted,
   onSetInputMode,
   onUndo,
   onRedo,
@@ -26,51 +27,86 @@ export const NonogramControls: React.FC<NonogramControlsProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
 
-  // Clean monochrome selected tool colors (No yellow)
+  // Active tool highlight colors (Only applied when puzzle is NOT completed)
+  const isFillActive = !isCompleted && inputMode === 'FILL';
+  const isCrossActive = !isCompleted && inputMode === 'CROSS';
+
   const activeBg = isDark ? '#F8FAFC' : '#1E293B';
   const activeText = isDark ? '#0F172A' : '#FFFFFF';
   const inactiveText = theme.colors.textSecondary;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      pointerEvents={isCompleted ? 'none' : 'auto'}
+    >
+      {/* Completed Status Banner */}
+      {isCompleted && (
+        <View
+          style={[
+            styles.completedBanner,
+            { backgroundColor: theme.colors.successBg, borderColor: theme.colors.successText },
+          ]}
+        >
+          <Text style={[styles.completedBannerText, { color: theme.colors.successText }]}>
+            ✓ חידה זו נפתרה (צפייה בפתרון בלבד)
+          </Text>
+        </View>
+      )}
+
       {/* Tool Selector: Clean Monochrome Segmented Button (Fill vs Cross) */}
-      <View style={[styles.toolSegmentContainer, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}>
+      <View
+        style={[
+          styles.toolSegmentContainer,
+          { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
+          isCompleted && styles.disabledContainer,
+        ]}
+      >
+        {/* Fill Button */}
         <Pressable
           style={[
             styles.toolButton,
-            inputMode === 'FILL' && { backgroundColor: activeBg },
+            isFillActive && { backgroundColor: activeBg },
+            isCompleted && styles.disabledButton,
           ]}
-          onPress={() => onSetInputMode('FILL')}
+          onPress={() => !isCompleted && onSetInputMode('FILL')}
+          disabled={isCompleted}
         >
           <View
             style={[
               styles.toolIconSquare,
-              { backgroundColor: inputMode === 'FILL' ? activeText : inactiveText },
+              { backgroundColor: isFillActive ? activeText : inactiveText },
+              isCompleted && { opacity: 0.3 },
             ]}
           />
           <Text
             style={[
               styles.toolText,
-              { color: inputMode === 'FILL' ? activeText : inactiveText },
-              inputMode === 'FILL' && { fontWeight: '800' },
+              { color: isFillActive ? activeText : inactiveText },
+              isFillActive && { fontWeight: '800' },
+              isCompleted && styles.disabledText,
             ]}
           >
             מילוי (משבצת)
           </Text>
         </Pressable>
 
+        {/* Cross X Button */}
         <Pressable
           style={[
             styles.toolButton,
-            inputMode === 'CROSS' && { backgroundColor: activeBg },
+            isCrossActive && { backgroundColor: activeBg },
+            isCompleted && styles.disabledButton,
           ]}
-          onPress={() => onSetInputMode('CROSS')}
+          onPress={() => !isCompleted && onSetInputMode('CROSS')}
+          disabled={isCompleted}
         >
           <Text
             style={[
               styles.toolText,
-              { color: inputMode === 'CROSS' ? activeText : inactiveText },
-              inputMode === 'CROSS' && { fontWeight: '800' },
+              { color: isCrossActive ? activeText : inactiveText },
+              isCrossActive && { fontWeight: '800' },
+              isCompleted && styles.disabledText,
             ]}
           >
             סימון X
@@ -85,12 +121,12 @@ export const NonogramControls: React.FC<NonogramControlsProps> = ({
           style={[
             styles.actionButton,
             { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
-            !canUndo && styles.disabledButton,
+            (!canUndo || isCompleted) && styles.disabledButton,
           ]}
           onPress={onUndo}
-          disabled={!canUndo}
+          disabled={!canUndo || isCompleted}
         >
-          <Text style={[styles.actionButtonText, { color: theme.colors.textPrimary }, !canUndo && styles.disabledText]}>
+          <Text style={[styles.actionButtonText, { color: theme.colors.textPrimary }, (!canUndo || isCompleted) && styles.disabledText]}>
             ↩ בטל
           </Text>
         </Pressable>
@@ -100,22 +136,27 @@ export const NonogramControls: React.FC<NonogramControlsProps> = ({
           style={[
             styles.actionButton,
             { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
-            !canRedo && styles.disabledButton,
+            (!canRedo || isCompleted) && styles.disabledButton,
           ]}
           onPress={onRedo}
-          disabled={!canRedo}
+          disabled={!canRedo || isCompleted}
         >
-          <Text style={[styles.actionButtonText, { color: theme.colors.textPrimary }, !canRedo && styles.disabledText]}>
+          <Text style={[styles.actionButtonText, { color: theme.colors.textPrimary }, (!canRedo || isCompleted) && styles.disabledText]}>
             ↪ בצע שוב
           </Text>
         </Pressable>
 
-        {/* Reset Button (Neutral clean styling without red) */}
+        {/* Reset Button */}
         <Pressable
-          style={[styles.actionButton, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}
+          style={[
+            styles.actionButton,
+            { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
+            isCompleted && styles.disabledButton,
+          ]}
           onPress={onReset}
+          disabled={isCompleted}
         >
-          <Text style={[styles.actionButtonText, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.actionButtonText, { color: theme.colors.textPrimary }, isCompleted && styles.disabledText]}>
             ↺ איפוס
           </Text>
         </Pressable>
@@ -130,6 +171,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
+  },
+  completedBanner: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completedBannerText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   toolSegmentContainer: {
     flexDirection: 'row-reverse',
@@ -179,10 +232,13 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
+  disabledContainer: {
+    opacity: 0.45,
+  },
   disabledButton: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   disabledText: {
-    opacity: 0.5,
+    opacity: 0.35,
   },
 });

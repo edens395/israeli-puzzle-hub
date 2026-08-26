@@ -10,13 +10,14 @@ import {
   View,
 } from 'react-native';
 import { EditorialCard } from '../components/ui/EditorialCard';
-import { BodyText, Caption, Heading, Title } from '../components/ui/Typography';
+import { Caption, Title } from '../components/ui/Typography';
 import { useTheme } from '../context/ThemeContext';
-import { DailyEditionData, PuzzleCategory, puzzleRepository } from '../storage/puzzleRepository';
+import { dailyPuzzleService } from '../services/dailyPuzzleService';
+import { DailyEditionData, getHebrewFormattedDate, getTodayDateString, PuzzleCategory, puzzleRepository } from '../storage/puzzleRepository';
 
 export interface ArchiveScreenProps {
   onBackToHub: () => void;
-  onOpenGame: (category: PuzzleCategory, date?: Date) => void;
+  onOpenGame: (category: PuzzleCategory, date?: Date | string) => void;
   initialCategory?: PuzzleCategory | 'all';
 }
 
@@ -25,43 +26,37 @@ type StatusFilter = 'ALL' | 'COMPLETED' | 'TO_PLAY';
 interface ArchiveItem {
   id: string;
   numStr: string;
+  puzzleTitle: string;
   dateStr: string;
-  dayOfWeek: string;
   category: PuzzleCategory;
   categoryName: string;
   isCompleted: boolean;
   elapsedSeconds: number;
   scoreText: string;
-  dateObj: Date;
+  dateObj: Date | string;
 }
 
 export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
   onBackToHub,
   onOpenGame,
-  initialCategory = 'all',
+  initialCategory = 'nonogram',
 }) => {
   const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState<boolean>(true);
-  const [editions, setEditions] = useState<DailyEditionData[]>([]);
+  const [archiveItems, setArchiveItems] = useState<ArchiveItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
-  const [categoryFilter, setCategoryFilter] = useState<PuzzleCategory | 'all'>(initialCategory);
+
+  const categoryNames: Record<string, string> = {
+    nonogram: 'שחור ופתור',
+    sudoku: 'סודוקו',
+    tashbetz: 'מיני-תשחץ',
+  };
+  const targetCategory: PuzzleCategory = initialCategory === 'all' ? 'nonogram' : initialCategory;
+  const currentCategoryName = categoryNames[targetCategory] || 'שחור ופתור';
 
   useEffect(() => {
     loadArchiveData();
-  }, []);
-
-  const loadArchiveData = async () => {
-    try {
-      setLoading(true);
-      // Fetch 30 past daily editions
-      const archives = await puzzleRepository.getArchiveEditions(30);
-      setEditions(archives);
-    } catch (e) {
-      console.error('Failed loading archive data', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [initialCategory]);
 
   const formatSeconds = (sec: number) => {
     if (sec <= 0) return '--:--';
@@ -70,87 +65,85 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
     return `${String(mins).padStart(2, '0')}:${String(remainderSecs).padStart(2, '0')}`;
   };
 
-  // Convert editions to archive table rows
-  const allItems: ArchiveItem[] = [];
-  editions.forEach((ed, idx) => {
-    const numStr = String(30 - idx).padStart(3, '0');
-    const dateObj = new Date(ed.dateString);
-    const isToday = idx === 0;
+  const loadArchiveData = async () => {
+    try {
+      setLoading(true);
+      const todayStr = getTodayDateString(new Date());
+      const remotePuzzles = await dailyPuzzleService.getPastDailyPuzzles(targetCategory);
 
-    const formattedMonthDay = dateObj.toLocaleDateString('he-IL', {
-      day: 'numeric',
-      month: 'short',
-    });
-    const dayOfWeek = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
-    const dateDisplay = isToday ? `${formattedMonthDay} • היום` : formattedMonthDay;
+      const puzzlesList = remotePuzzles.length > 0 ? remotePuzzles : [
+        { id: `nonogram_${todayStr}`, date_string: todayStr, category: targetCategory, title: 'מגן דוד ✡️' },
+        { id: `nonogram_2026-08-25`, date_string: '2026-08-25', category: targetCategory, title: 'לב ❤️' },
+      ];
 
-    const categories: { cat: PuzzleCategory; name: string }[] = [
-      { cat: 'nonogram', name: 'שחור ופתור' },
-      { cat: 'sudoku', name: 'סודוקו' },
-      { cat: 'tashbetz', name: 'מיני-תשחץ' },
-    ];
+      const items: ArchiveItem[] = [];
+      for (let i = 0; i < puzzlesList.length; i++) {
+        const p = puzzlesList[i];
+        const dailyData = await puzzleRepository.getDailyProgress(p.date_string);
+        const catProgress = dailyData?.puzzles?.[p.category as PuzzleCategory];
+        const isDone = catProgress?.status === 'completed' || catProgress?.completionPercent === 100;
+        const elapsed = catProgress?.elapsedSeconds || 0;
 
-    categories.forEach(({ cat, name }) => {
-      const pProgress = ed.puzzles[cat];
-      const isDone = pProgress?.status === 'completed';
-      const elapsed = pProgress?.elapsedSeconds || 0;
+        items.push({
+          id: p.id || `${p.category}_${p.date_string}`,
+          numStr: String(puzzlesList.length - i).padStart(3, '0'),
+          puzzleTitle: p.title || 'חידה',
+          dateStr: getHebrewFormattedDate(p.date_string),
+          category: p.category as PuzzleCategory,
+          categoryName: categoryNames[p.category] || 'שחור ופתור',
+          isCompleted: isDone,
+          elapsedSeconds: elapsed,
+          scoreText: isDone && elapsed > 0 ? formatSeconds(elapsed) : '--:--',
+          dateObj: p.date_string,
+        });
+      }
 
-      allItems.push({
-        id: `${numStr}_${cat}`,
-        numStr,
-        dateStr: dateDisplay,
-        dayOfWeek,
-        category: cat,
-        categoryName: name,
-        isCompleted: isDone,
-        elapsedSeconds: elapsed,
-        scoreText: isDone ? formatSeconds(elapsed) : '--:--',
-        dateObj,
-      });
-    });
-  });
+      setArchiveItems(items);
+    } catch (e) {
+      console.error('Failed loading archive data', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter items
-  const filteredItems = allItems.filter((item) => {
-    if (categoryFilter !== 'all' && item.category !== categoryFilter) {
-      return false;
-    }
-    if (statusFilter === 'COMPLETED' && !item.isCompleted) {
-      return false;
-    }
-    if (statusFilter === 'TO_PLAY' && item.isCompleted) {
-      return false;
-    }
+  const filteredItems = archiveItems.filter((item) => {
+    if (statusFilter === 'COMPLETED' && !item.isCompleted) return false;
+    if (statusFilter === 'TO_PLAY' && item.isCompleted) return false;
     return true;
   });
 
-  const totalPlayed = allItems.filter((i) => i.isCompleted).length;
-  const totalCount = allItems.length;
+  const totalPlayed = archiveItems.filter((i) => i.isCompleted).length;
+  const totalCount = archiveItems.length;
+
+  // Calculate user's average solve time across all played games
+  const completedItems = archiveItems.filter((i) => i.isCompleted && i.elapsedSeconds > 0);
+  const avgSeconds = completedItems.length > 0
+    ? Math.round(completedItems.reduce((acc, curr) => acc + curr.elapsedSeconds, 0) / completedItems.length)
+    : 0;
+  const avgTimeDisplay = avgSeconds > 0 ? formatSeconds(avgSeconds) : '--:--';
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.bgPrimary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.bgPrimary} />
+      
+      {/* Clean Top Navigation Header */}
+      <View style={[styles.headerContainer, { backgroundColor: theme.colors.bgPrimary }]}>
+        <Pressable
+          style={[styles.backArrowButton, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}
+          onPress={onBackToHub}
+        >
+          <Text style={[styles.backArrowText, { color: theme.colors.textPrimary }]}>◀</Text>
+        </Pressable>
+
+        <View style={styles.headerRightCol}>
+          <Title variant="serif" style={styles.headerTitle}>ארכיון - {currentCategoryName}</Title>
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={true}>
         
-        {/* Top Header Navigation */}
-        <View style={[styles.headerContainer, { borderColor: theme.colors.border }]}>
-          <Pressable
-            style={[styles.backButton, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}
-            onPress={onBackToHub}
-          >
-            <Text style={[styles.backButtonText, { color: theme.colors.accent }]}>◀ חזרה</Text>
-          </Pressable>
-          <Heading variant="serif" style={styles.headerTitle}>ארכיון</Heading>
-        </View>
-
-        {/* Subtitle */}
-        <View style={styles.subtitleRow}>
-          <BodyText color={theme.colors.textSecondary} style={styles.subtitleText}>
-            כל החידות מהיום הראשון. שחק בכל אחת מהן.
-          </BodyText>
-        </View>
-
-        {/* 3 Summary Stat Cards */}
+        {/* Summary Stat Cards */}
         <View style={styles.statCardsRow}>
           <EditorialCard style={styles.statCard}>
             <Caption color={theme.colors.textMuted} style={styles.statLabel}>חידות שנפתרו</Caption>
@@ -159,46 +152,8 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
 
           <EditorialCard style={styles.statCard}>
             <Caption color={theme.colors.textMuted} style={styles.statLabel}>זמן ממוצע</Caption>
-            <Title variant="serif" style={styles.statValue}>01:45</Title>
+            <Title variant="serif" style={styles.statValue}>{avgTimeDisplay}</Title>
           </EditorialCard>
-
-          <EditorialCard style={styles.statCard}>
-            <Caption color={theme.colors.textMuted} style={styles.statLabel}>היום הטוב ביותר</Caption>
-            <Title variant="serif" style={styles.statValue}>00:42</Title>
-          </EditorialCard>
-        </View>
-
-        {/* Category Selector Chips */}
-        <View style={styles.categoryChipsRow}>
-          {[
-            { id: 'all', label: 'כל המשחקים' },
-            { id: 'nonogram', label: 'שחור ופתור' },
-            { id: 'sudoku', label: 'סודוקו' },
-            { id: 'tashbetz', label: 'מיני-תשחץ' },
-          ].map((catObj) => {
-            const isSelected = categoryFilter === catObj.id;
-            return (
-              <Pressable
-                key={`cat-filter-${catObj.id}`}
-                style={[
-                  styles.catChip,
-                  { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border },
-                  isSelected && { backgroundColor: theme.colors.bgHighlight, borderColor: theme.colors.borderStrong },
-                ]}
-                onPress={() => setCategoryFilter(catObj.id as any)}
-              >
-                <Text
-                  style={[
-                    styles.catChipText,
-                    { color: theme.colors.textSecondary },
-                    isSelected && { color: '#1A1A1C', fontWeight: '800' },
-                  ]}
-                >
-                  {catObj.label}
-                </Text>
-              </Pressable>
-            );
-          })}
         </View>
 
         {/* Status Filter Chips (ALL, COMPLETED, TO PLAY) */}
@@ -206,11 +161,16 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
           <Pressable
             style={[
               styles.statusChip,
-              statusFilter === 'ALL' && [styles.statusChipActive, { backgroundColor: theme.colors.textPrimary }],
+              statusFilter === 'ALL' && [styles.statusChipActive, { backgroundColor: isDark ? '#F8FAFC' : '#1E293B' }],
             ]}
             onPress={() => setStatusFilter('ALL')}
           >
-            <Text style={[styles.statusChipText, statusFilter === 'ALL' && { color: theme.colors.bgCard }]}>
+            <Text
+              style={[
+                styles.statusChipText,
+                { color: statusFilter === 'ALL' ? (isDark ? '#0F172A' : '#FFFFFF') : theme.colors.textSecondary },
+              ]}
+            >
               הכל
             </Text>
           </Pressable>
@@ -218,11 +178,16 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
           <Pressable
             style={[
               styles.statusChip,
-              statusFilter === 'COMPLETED' && [styles.statusChipActive, { backgroundColor: theme.colors.textPrimary }],
+              statusFilter === 'COMPLETED' && [styles.statusChipActive, { backgroundColor: isDark ? '#F8FAFC' : '#1E293B' }],
             ]}
             onPress={() => setStatusFilter('COMPLETED')}
           >
-            <Text style={[styles.statusChipText, statusFilter === 'COMPLETED' && { color: theme.colors.bgCard }]}>
+            <Text
+              style={[
+                styles.statusChipText,
+                { color: statusFilter === 'COMPLETED' ? (isDark ? '#0F172A' : '#FFFFFF') : theme.colors.textSecondary },
+              ]}
+            >
               הושלמו
             </Text>
           </Pressable>
@@ -230,11 +195,16 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
           <Pressable
             style={[
               styles.statusChip,
-              statusFilter === 'TO_PLAY' && [styles.statusChipActive, { backgroundColor: theme.colors.textPrimary }],
+              statusFilter === 'TO_PLAY' && [styles.statusChipActive, { backgroundColor: isDark ? '#F8FAFC' : '#1E293B' }],
             ]}
             onPress={() => setStatusFilter('TO_PLAY')}
           >
-            <Text style={[styles.statusChipText, statusFilter === 'TO_PLAY' && { color: theme.colors.bgCard }]}>
+            <Text
+              style={[
+                styles.statusChipText,
+                { color: statusFilter === 'TO_PLAY' ? (isDark ? '#0F172A' : '#FFFFFF') : theme.colors.textSecondary },
+              ]}
+            >
               למשחק
             </Text>
           </Pressable>
@@ -243,18 +213,17 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
         {/* Table Header Row */}
         <View style={[styles.tableHeaderRow, { borderBottomColor: theme.colors.border }]}>
           <Caption style={[styles.colNo, { color: theme.colors.textMuted }]}>מס׳</Caption>
-          <Caption style={[styles.colDate, { color: theme.colors.textMuted }]}>תאריך • משחק</Caption>
+          <Caption style={[styles.colDate, { color: theme.colors.textMuted }]}>חידה • תאריך</Caption>
           <Caption style={[styles.colScore, { color: theme.colors.textMuted }]}>זמן</Caption>
           <Caption style={[styles.colStatus, { color: theme.colors.textMuted }]}>סטטוס</Caption>
         </View>
 
-        {/* Loading Indicator */}
+        {/* Loading Indicator or Archive Table */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={theme.colors.accent} />
           </View>
         ) : (
-          /* Archive List Rows */
           <View style={[styles.tableContainer, { backgroundColor: theme.colors.bgCard, borderColor: theme.colors.border }]}>
             {filteredItems.map((item, idx) => (
               <Pressable
@@ -269,11 +238,13 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
                 <Caption style={[styles.colNo, { color: theme.colors.textMuted }]}>{item.numStr}</Caption>
                 
                 <View style={styles.colDateCol}>
-                  <Text style={[styles.dateText, { color: theme.colors.textPrimary }]}>{item.dateStr}</Text>
-                  <Caption color={theme.colors.textSecondary}>{item.categoryName} • {item.dayOfWeek}</Caption>
+                  <Text style={[styles.dateText, { color: theme.colors.textPrimary }]}>
+                    {item.categoryName} ({item.puzzleTitle})
+                  </Text>
+                  <Caption color={theme.colors.textSecondary}>{item.dateStr}</Caption>
                 </View>
 
-                <Text style={[styles.colScoreText, { color: item.isCompleted ? theme.colors.accentGold : theme.colors.textMuted }]}>
+                <Text style={[styles.colScoreText, { color: item.isCompleted ? theme.colors.textPrimary : theme.colors.textMuted }]}>
                   {item.scoreText}
                 </Text>
 
@@ -283,14 +254,14 @@ export const ArchiveScreen: React.FC<ArchiveScreenProps> = ({
                       styles.statusPillBtn,
                       item.isCompleted
                         ? { backgroundColor: theme.colors.successBg }
-                        : { backgroundColor: theme.colors.textPrimary },
+                        : { backgroundColor: isDark ? '#F8FAFC' : '#1E293B' },
                     ]}
                     onPress={() => onOpenGame(item.category, item.dateObj)}
                   >
                     <Text
                       style={[
                         styles.statusPillBtnText,
-                        { color: item.isCompleted ? theme.colors.successText : theme.colors.bgCard },
+                        { color: item.isCompleted ? theme.colors.successText : (isDark ? '#0F172A' : '#FFFFFF') },
                       ]}
                     >
                       {item.isCompleted ? 'הושלם ✓' : 'שחק'}
@@ -321,31 +292,34 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   headerContainer: {
-    flexDirection: 'row-reverse',
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  backArrowButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backArrowText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  headerRightCol: {
+    alignItems: 'flex-end',
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '900',
-  },
-  backButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  backButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  subtitleRow: {
-    marginTop: -4,
-  },
-  subtitleText: {
-    fontSize: 14,
     textAlign: 'right',
   },
   statCardsRow: {
@@ -368,21 +342,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     textAlign: 'right',
-  },
-  categoryChipsRow: {
-    flexDirection: 'row-reverse',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  catChipText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   statusChipsRow: {
     flexDirection: 'row-reverse',
@@ -421,7 +380,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   colScore: {
-    width: 60,
+    width: 65,
     textAlign: 'center',
     fontSize: 11,
     fontWeight: '800',
@@ -457,7 +416,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   colScoreText: {
-    width: 60,
+    width: 65,
     textAlign: 'center',
     fontSize: 13,
     fontWeight: '700',
