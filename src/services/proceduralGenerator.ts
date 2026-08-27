@@ -9,169 +9,54 @@ export interface ProceduralPuzzle {
 }
 
 // Pixel art shape templates & procedural variation generators
-const DRAWING_TEMPLATES: { title: string; base: boolean[][] }[] = [
-  {
-    title: 'לב ❤️',
-    base: [
-      [false, true, false, true, false],
-      [true, true, true, true, true],
-      [true, true, true, true, true],
-      [false, true, true, true, false],
-      [false, false, true, false, false],
-    ],
-  },
-  {
-    title: 'מגן דוד ✡️',
-    base: [
-      [false, false, false, true, true, true, true, false, false, false],
-      [false, false, true, false, false, false, false, true, false, false],
-      [false, true, false, false, false, false, false, false, true, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, false, false, false, false, false, false, true, false],
-      [false, true, false, false, false, false, false, false, true, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, false, false, false, false, false, false, true, false],
-      [false, false, true, false, false, false, false, true, false, false],
-      [false, false, false, true, true, true, true, false, false, false],
-    ],
-  },
-  {
-    title: 'מנורת שבעת הקנים 🕎',
-    base: [
-      [true, false, true, false, true, false, true, false, true, false],
-      [true, false, true, false, true, false, true, false, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, false, false, false, true, false, false, false, true, false],
-      [false, true, true, true, true, true, true, true, false, false],
-      [false, false, false, false, true, false, false, false, false, false],
-      [false, false, false, false, true, false, false, false, false, false],
-      [false, false, false, true, true, true, false, false, false, false],
-      [false, false, false, true, true, true, false, false, false, false],
-      [false, false, true, true, true, true, true, false, false, false],
-    ],
-  },
-  {
-    title: 'סירת מפרש ⛵',
-    base: [
-      [false, false, false, false, true, false, false, false, false, false],
-      [false, false, false, true, true, false, false, false, false, false],
-      [false, false, true, true, true, false, false, false, false, false],
-      [false, true, true, true, true, false, false, false, false, false],
-      [true, true, true, true, true, false, false, false, false, false],
-      [false, false, false, false, true, false, false, false, false, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, false, false, true, true, true, true, false, false, false],
-    ],
-  },
-  {
-    title: 'תפוח 🍎',
-    base: [
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, true, false, false, false, false, false, false],
-      [false, true, true, false, false, true, true, true, false, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [false, true, true, true, true, true, true, true, false, false],
-      [false, false, true, true, true, true, true, false, false, false],
-      [false, false, false, true, false, true, false, false, false, false],
-    ],
-  },
-  {
-    title: 'בית 🏠',
-    base: [
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, true, true, true, true, false, false, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, true, true, false, false, true, true, true, true, false],
-      [false, true, true, false, false, true, true, true, true, false],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, true, true, true, true, true, true, true, true, false],
-    ],
-  },
-  {
-    title: 'עוגן ⚓',
-    base: [
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, true, false, false, true, false, false, false],
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, false, true, true, false, false, false, false],
-      [true, false, false, false, true, true, false, false, false, true],
-      [true, true, false, false, true, true, false, false, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, false, false],
-    ],
-  },
-  {
-    title: 'חללית 🚀',
-    base: [
-      [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false],
-      [false, false, false, false, false, false, true, true, true, false, false, false, false, false, false],
-      [false, false, false, false, false, false, true, true, true, false, false, false, false, false, false],
-      [false, false, false, false, false, true, true, true, true, true, false, false, false, false, false],
-      [false, false, false, false, false, true, true, false, true, true, false, false, false, false, false],
-      [false, false, false, false, false, true, true, true, true, true, false, false, false, false, false],
-      [false, false, false, false, true, true, true, true, true, true, true, false, false, false, false],
-      [false, false, false, false, true, true, true, true, true, true, true, false, false, false, false],
-      [false, false, false, true, true, true, true, true, true, true, true, true, false, false, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [false, true, true, false, true, true, true, true, true, true, true, false, true, true, false],
-      [true, true, false, false, true, true, true, true, true, true, true, false, false, true, true],
-      [true, false, false, false, false, true, true, true, true, true, false, false, false, false, true],
-      [false, false, false, false, false, false, true, true, true, false, false, false, false, false, false],
-      [false, false, false, false, false, false, false, true, false, false, false, false, false, false],
-    ],
-  },
-  {
-    title: 'כתר מלכות 👑',
-    base: [
-      [true, false, false, false, false, false, true, true, true, false, false, false, false, false, true],
-      [true, true, false, false, false, true, true, true, true, true, false, false, false, true, true],
-      [true, true, true, false, true, true, true, true, true, true, true, false, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [false, true, true, true, true, true, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [false, false, false, true, true, true, true, true, true, true, true, true, false, false, false],
-      [false, false, false, true, true, true, true, true, true, true, true, true, false, false, false],
-      [false, false, false, true, false, true, false, true, false, true, false, true, false, false, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-    ],
-  },
-  {
-    title: 'חתול 🐱',
-    base: [
-      [true, true, false, false, false, false, false, false, true, true],
-      [true, true, true, false, false, false, false, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true],
-      [true, false, true, true, true, true, true, true, false, true],
-      [true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, false, true, true, false, true, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, false, true, true, false, false, true, true, false, false],
-      [false, false, true, true, false, false, true, true, false, false],
-    ],
-  },
-];
+
 
 /**
  * Generates a unique, solvable procedural Nonogram for a target date
  */
+// Simple PRNG
+function mulberry32(a: number) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+export function generateSymmetricFallbackGrid(seed: number, size: number = 15): SolutionGrid {
+  const random = mulberry32(seed);
+  let grid: SolutionGrid = [];
+  let attempts = 0;
+  
+  while (attempts < 200) {
+    attempts++;
+    grid = [];
+    for (let r = 0; r < size; r++) {
+      let row = new Array(size).fill(false);
+      for (let c = 0; c < Math.ceil(size / 2); c++) {
+        const val = random() > 0.4;
+        row[c] = val;
+        row[size - 1 - c] = val; // symmetric
+      }
+      grid.push(row);
+    }
+    
+    if (validateNonogramSolvability(grid).isSolvable) {
+      return grid;
+    }
+  }
+  
+  // If we really can't find one, return a basic cross (always solvable)
+  grid = Array(size).fill(0).map(() => Array(size).fill(false));
+  for (let i = 0; i < size; i++) {
+    grid[i][Math.floor(size/2)] = true;
+    grid[Math.floor(size/2)][i] = true;
+  }
+  return grid;
+}
+
 export function generateProceduralPuzzleForDate(dateStr: string): ProceduralPuzzle {
-  // Convert dateStr (e.g. '2026-09-02') into integer hash seed
   let hash = 0;
   for (let i = 0; i < dateStr.length; i++) {
     hash = (hash << 5) - hash + dateStr.charCodeAt(i);
@@ -179,33 +64,13 @@ export function generateProceduralPuzzleForDate(dateStr: string): ProceduralPuzz
   }
   const seed = Math.abs(hash);
 
-  // Pick drawing template based on seed
-  const templateIdx = seed % DRAWING_TEMPLATES.length;
-  const template = DRAWING_TEMPLATES[templateIdx];
-
-  // Make deep copy of solution
-  let solution: SolutionGrid = template.base.map(row => [...row]);
-  const width = solution[0].length;
-  const height = solution.length;
-
-  // Verify solvability
-  const { isSolvable } = validateNonogramSolvability(solution);
-
-  if (!isSolvable) {
-    // If not solvable, fallback to 5x5 heart
-    solution = DRAWING_TEMPLATES[0].base.map(r => [...r]);
-    return {
-      title: DRAWING_TEMPLATES[0].title,
-      solution,
-      width: 5,
-      height: 5,
-    };
-  }
+  const size = (seed % 2 === 0) ? 15 : 20;
+  const solution = generateSymmetricFallbackGrid(seed, size);
 
   return {
-    title: template.title,
+    title: `תבנית ${size}x${size} אבסטרקטית 🧩`,
     solution,
-    width,
-    height,
+    width: size,
+    height: size,
   };
 }

@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
 
 // CORS headers for browser/app access
+type SolutionGrid = boolean[][];
+type Clue = number[];
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -9,10 +12,90 @@ const corsHeaders = {
 
 // ---------------------------------------------------------
 // Logic Functions (ported from existing logic to avoid deps)
+
+// Simple PRNG
+function mulberry32(a: number) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+function generateSymmetricFallbackGrid(seed: number, size: number = 15): { title: string, solution: SolutionGrid } {
+  const random = mulberry32(seed);
+  let grid: SolutionGrid = [];
+  let attempts = 0;
+  
+  while (attempts < 200) {
+    attempts++;
+    grid = [];
+    for (let r = 0; r < size; r++) {
+      let row = new Array(size).fill(false);
+      for (let c = 0; c < Math.ceil(size / 2); c++) {
+        const val = random() > 0.4;
+        row[c] = val;
+        row[size - 1 - c] = val;
+      }
+      grid.push(row);
+    }
+    
+    if (validateNonogramSolvability(grid).isSolvable) {
+      return { title: `תבנית ${size}x${size} אבסטרקטית 🧩`, solution: grid };
+    }
+  }
+  
+  // Basic cross
+  grid = Array(size).fill(0).map(() => Array(size).fill(false));
+  for (let i = 0; i < size; i++) {
+    grid[i][Math.floor(size/2)] = true;
+    grid[Math.floor(size/2)][i] = true;
+  }
+  return { title: `תבנית ${size}x${size} אבסטרקטית 🧩`, solution: grid };
+}
+
+async function fetchLLMPuzzle(size: number, openAiKey: string): Promise<{ title: string, solution: SolutionGrid } | null> {
+  try {
+    const prompt = `Generate a ${size}x${size} pixel art image of a simple, recognizable object (like a dog, tree, house, boat, apple, car, etc).
+Return ONLY a valid JSON object in this exact format:
+{
+  "title": "Hebrew name of the object with a matching emoji (e.g. 'כלב 🐶')",
+  "solution": [[boolean, boolean, ...], ...]
+}
+The solution MUST be exactly ${size} arrays of ${size} booleans. Make sure the shape is mostly solid so it forms a good nonogram puzzle.`;
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${openAiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.8
+      })
+    });
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    const content = JSON.parse(data.choices[0].message.content);
+    
+    if (content.title && Array.isArray(content.solution) && content.solution.length === size && content.solution[0].length === size) {
+      return content;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------
 
-type SolutionGrid = boolean[][];
-type Clue = number[];
+
 
 function calculateLineClue(line: boolean[]): Clue {
   const clue: number[] = [];
@@ -135,164 +218,7 @@ function addOneCalendarDay(dateStr: string): string {
   return d.toISOString().split('T')[0];
 }
 
-// Same bank from generateSqlInsert.ts
-const PUZZLE_BANK = [
-  {
-    title: 'לב ❤️',
-    solution: [
-      [false, true, false, true, false],
-      [true, true, true, true, true],
-      [true, true, true, true, true],
-      [false, true, true, true, false],
-      [false, false, true, false, false],
-    ],
-  },
-  {
-    title: 'מגן דוד ✡️',
-    solution: [
-      [false, false, false, true, true, true, true, false, false, false],
-      [false, false, true, false, false, false, false, true, false, false],
-      [false, true, false, false, false, false, false, false, true, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, false, false, false, false, false, false, true, false],
-      [false, true, false, false, false, false, false, false, true, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, false, false, false, false, false, false, true, false],
-      [false, false, true, false, false, false, false, true, false, false],
-      [false, false, false, true, true, true, true, false, false, false],
-    ],
-  },
-  {
-    title: 'מנורת שבעת הקנים 🕎',
-    solution: [
-      [true, false, true, false, true, false, true, false, true, false],
-      [true, false, true, false, true, false, true, false, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, false, false, false, true, false, false, false, true, false],
-      [false, true, true, true, true, true, true, true, false, false],
-      [false, false, false, false, true, false, false, false, false, false],
-      [false, false, false, false, true, false, false, false, false, false],
-      [false, false, false, true, true, true, false, false, false, false],
-      [false, false, false, true, true, true, false, false, false, false],
-      [false, false, true, true, true, true, true, false, false, false],
-    ],
-  },
-  {
-    title: 'סירת מפרש ⛵',
-    solution: [
-      [false, false, false, false, true, false, false, false, false, false],
-      [false, false, false, true, true, false, false, false, false, false],
-      [false, false, true, true, true, false, false, false, false, false],
-      [false, true, true, true, true, false, false, false, false, false],
-      [true, true, true, true, true, false, false, false, false, false],
-      [false, false, false, false, true, false, false, false, false, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, false, false, true, true, true, true, false, false, false],
-    ],
-  },
-  {
-    title: 'תפוח 🍎',
-    solution: [
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, true, false, false, false, false, false, false],
-      [false, true, true, false, false, true, true, true, false, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, false],
-      [false, true, true, true, true, true, true, true, false, false],
-      [false, false, true, true, true, true, true, false, false, false],
-      [false, false, false, true, false, true, false, false, false, false],
-    ],
-  },
-  {
-    title: 'בית 🏠',
-    solution: [
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, true, true, true, true, false, false, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, true, true, true, true, true, true, true, true, false],
-      [true, true, true, true, true, true, true, true, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, true, true, false, false, true, true, true, true, false],
-      [false, true, true, false, false, true, true, true, true, false],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, true, true, true, true, true, true, true, true, false],
-    ],
-  },
-  {
-    title: 'עוגן ⚓',
-    solution: [
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, true, false, false, true, false, false, false],
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, false, false, false, true, true, false, false, false, false],
-      [false, false, false, false, true, true, false, false, false, false],
-      [true, false, false, false, true, true, false, false, false, true],
-      [true, true, false, false, true, true, false, false, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, false, false],
-    ],
-  },
-  {
-    title: 'חללית 🚀',
-    solution: [
-      [false, false, false, false, false, false, false, true, false, false, false, false, false, false, false],
-      [false, false, false, false, false, false, true, true, true, false, false, false, false, false, false],
-      [false, false, false, false, false, false, true, true, true, false, false, false, false, false, false],
-      [false, false, false, false, false, true, true, true, true, true, false, false, false, false, false],
-      [false, false, false, false, false, true, true, false, true, true, false, false, false, false, false],
-      [false, false, false, false, false, true, true, true, true, true, false, false, false, false, false],
-      [false, false, false, false, true, true, true, true, true, true, true, false, false, false, false],
-      [false, false, false, false, true, true, true, true, true, true, true, false, false, false, false],
-      [false, false, false, true, true, true, true, true, true, true, true, true, false, false, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [false, true, true, false, true, true, true, true, true, true, true, false, true, true, false],
-      [true, true, false, false, true, true, true, true, true, true, true, false, false, true, true],
-      [true, false, false, false, false, true, true, true, true, true, false, false, false, false, true],
-      [false, false, false, false, false, false, true, true, true, false, false, false, false, false, false],
-      [false, false, false, false, false, false, false, true, false, false, false, false, false, false],
-    ],
-  },
-  {
-    title: 'כתר מלכות 👑',
-    solution: [
-      [true, false, false, false, false, false, true, true, true, false, false, false, false, false, true],
-      [true, true, false, false, false, true, true, true, true, true, false, false, false, true, true],
-      [true, true, true, false, true, true, true, true, true, true, true, false, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [false, true, true, true, true, true, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [false, false, false, true, true, true, true, true, true, true, true, true, false, false, false],
-      [false, false, false, true, true, true, true, true, true, true, true, true, false, false, false],
-      [false, false, false, true, false, true, false, true, false, true, false, true, false, false, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [false, false, true, true, true, true, true, true, true, true, true, true, true, false, false],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
-    ],
-  },
-  {
-    title: 'חתול 🐱',
-    solution: [
-      [true, true, false, false, false, false, false, false, true, true],
-      [true, true, true, false, false, false, false, true, true, true],
-      [true, true, true, true, true, true, true, true, true, true],
-      [true, false, true, true, true, true, true, true, false, true],
-      [true, true, true, true, true, true, true, true, true, true],
-      [true, true, true, false, true, true, false, true, true, true],
-      [false, true, true, true, true, true, true, true, true, false],
-      [false, false, true, true, true, true, true, true, false, false],
-      [false, false, true, true, false, false, true, true, false, false],
-      [false, false, true, true, false, false, true, true, false, false],
-    ],
-  },
-];
+
 
 // ---------------------------------------------------------
 // Main Handler
@@ -357,27 +283,36 @@ serve(async (req) => {
     }
 
     // 4. Select Source Image
-    let availableTemplates = PUZZLE_BANK.filter(p => !recentTitles.has(p.title));
-    if (availableTemplates.length === 0) {
-      // If we've scheduled all templates recently, just fallback to the full bank
-      availableTemplates = PUZZLE_BANK;
-    }
-
-    // Filter to ensure we only pick templates that are actually solvable by line deduction
-    availableTemplates = availableTemplates.filter(template => {
-      return validateNonogramSolvability(template.solution).isSolvable;
-    });
-
-    if (availableTemplates.length === 0) {
-      throw new Error("No uniquely solvable templates available.");
-    }
-
-    // Pick random template
-    const templateIndex = Math.floor(Math.random() * availableTemplates.length);
-    const template = availableTemplates[templateIndex];
+    let template = null;
+    const openAiKey = Deno.env.get('OPENAI_API_KEY');
     
-    // Deep copy solution grid
-    const solution = template.solution.map(row => [...row]);
+    // Convert nextMissingDate into seed
+    let hash = 0;
+    for (let i = 0; i < nextMissingDate.length; i++) {
+      hash = (hash << 5) - hash + nextMissingDate.charCodeAt(i);
+      hash |= 0;
+    }
+    const seed = Math.abs(hash);
+    const size = (seed % 2 === 0) ? 15 : 20;
+
+    if (openAiKey) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const llmResult = await fetchLLMPuzzle(size, openAiKey);
+        if (llmResult) {
+          if (validateNonogramSolvability(llmResult.solution).isSolvable) {
+            template = llmResult;
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!template) {
+      // Fallback
+      template = generateSymmetricFallbackGrid(seed, size);
+    }
+    
+    const solution = template.solution.map((row: boolean[]) => [...row]);
     const width = solution[0].length;
     const height = solution.length;
 
